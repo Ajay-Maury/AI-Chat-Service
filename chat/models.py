@@ -24,6 +24,7 @@ class Message(models.Model):
     chat_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     chat_label = models.CharField(max_length=100, blank=True, null=True)
     messages = models.JSONField(default=list)
+    summary = models.JSONField(default=dict)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
     updated_at = models.DateTimeField(auto_now=True)  # Automatically updates when a record is saved

@@ -1,3 +1,4 @@
+import json
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import api_view
@@ -22,16 +23,16 @@ def login_signup(request):
 
 @api_view(['POST'])
 def chat(request):
-    user_id = request.data.get('user_id')
-    chat_id = request.data.get('chat_id')
-    question = request.data.get('text')
-
+    data = json.loads(request.body)
+    print('\n data----',data)
+    user_id = data.get('user_id')
+    chat_id = data.get('chat_id')
+    question = data.get('text')
+    
+    print(type(user_id))
     # Fetch user by ID
-    try:
-        user = User.objects.get(id=user_id)
-    except User.DoesNotExist:
-        return Response({'error': 'User does not exist'}, status=status.HTTP_404_NOT_FOUND)
-
+    user = User.objects.get(id=user_id)
+    print('\n user ---', user)
     # Get OpenAI response and save chat history
     system_response = get_openai_response(user, chat_id, question)
 
@@ -42,6 +43,5 @@ def chat(request):
 def get_chat_history(request, chat_id):
     print('\n chat_id -------', chat_id)
     chat_history = fetch_chat(chat_id)
-    print('\n chat_history -------', chat_history)
     serializer = MessageSerializer(chat_history)
     return Response(serializer.data, status=status.HTTP_200_OK)

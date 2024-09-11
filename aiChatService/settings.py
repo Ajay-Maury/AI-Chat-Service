@@ -11,7 +11,8 @@ load_dotenv()
 # Retrieve environment variables
 CHAT_MODEL_NAME = os.getenv("CHAT_MODEL_NAME", "gpt-35-turbo")
 CHAT_TEMPERATURE = float(os.getenv("CHAT_TEMPERATURE", 0.7))
-CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", 100))
+CHAT_MAX_TOKENS = int(os.getenv("CHAT_MAX_TOKENS", 200))
+CHAT_SUMMARY_MAX_TOKEN = int(os.getenv("CHAT_SUMMARY_MAX_TOKEN", 200))
 
 
 # Quick-start development settings - unsuitable for production
@@ -37,7 +38,6 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'chat',
-    'drf_yasg'
 ]
 
 MIDDLEWARE = [

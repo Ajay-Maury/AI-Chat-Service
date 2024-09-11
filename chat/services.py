@@ -1,6 +1,6 @@
 from langchain_openai import AzureChatOpenAI
 from langchain.chains import ConversationChain
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationSummaryBufferMemory, ConversationBufferWindowMemory
 from .models import Message, User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -12,7 +12,9 @@ import re
 CHAT_API = {
     "MODEL_NAME": settings.CHAT_MODEL_NAME,  # Azure OpenAI Model
     "TEMPERATURE": settings.CHAT_TEMPERATURE,
-    "MAX_TOKENS": settings.CHAT_MAX_TOKENS
+    "MAX_TOKENS": settings.CHAT_MAX_TOKENS,
+    "CONVERSATION_BUFFER_WINDOW_SIZE": 5,
+    "CHAT_SUMMARY_MAX_TOKEN": settings.CHAT_SUMMARY_MAX_TOKEN,
 }
 
 
@@ -26,40 +28,43 @@ def validate_email_address(email):
 
 def get_or_update_user(email, password, first_name='', last_name=''):
     """
-    Retrieves or updates a user by email. Creates a new user if none exists.
+    Retrieves or creates a user by email. Updates only password if the user exists.
     """
     # Validate email format
     validate_email_address(email)
-    
-    # Create or update user
-    user, created = User.objects.update_or_create(
-        email=email,
-        defaults={
-            'first_name': first_name,
-            'last_name': last_name,
-            'is_active': True
-        }
-    )
-    
-    # If the user was updated, ensure the password is correct
-    if not created:
+
+    # Check if the user already exists
+    user_exists = User.objects.filter(email=email).exists()
+    print('\n user_exists ---',user_exists)
+
+    if user_exists:
+        # If the user exists, update only the password
+        user = User.objects.get(email=email)
         if user.check_password(password):
             return user, False  # Return existing user and False (not new)
         else:
             raise ValueError("Invalid credentials")
     else:
-        # If the user was created, set the password
+        # If the user does not exist, create a new user
+        user = User.objects.create(
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+            is_active=True
+        )
         user.set_password(password)
         user.save()
         return user, True  # Return new user and True (is new)
 
 
-
 def fetch_chat(chat_id):
     """
     Retrieves the chat history for a specific user.
+    Returns None if no matching chat is found.
     """
-    return Message.objects.get(chat_id=chat_id, is_active=True)
+    chat = Message.objects.filter(chat_id=chat_id, is_active=True).first() or {}
+    print('\n chat', chat)
+    return chat
 
 
 def get_openai_response(user, chat_id, question):
@@ -69,17 +74,19 @@ def get_openai_response(user, chat_id, question):
     """
 
     # Step 1: Fetch the previous chat history for the user
-    try:
-        past_chat = fetch_chat(chat_id)
-    except Message.DoesNotExist:
-        # Handle the case where the chat does not exist
-        past_chat = None
-        messages = []
+    past_chat = fetch_chat(chat_id) or None
+    messages = []
     
-    print('\n past_chat-----', past_chat)
+    # Step 2: Set up the LLM (Azure OpenAI)
+    llm = AzureChatOpenAI(
+        azure_deployment=CHAT_API["MODEL_NAME"],
+        temperature=CHAT_API["TEMPERATURE"],
+        max_tokens=CHAT_API["MAX_TOKENS"]
+    )
 
-    # Step 2: Initialize conversation memory and load past chats
-    memory = ConversationBufferMemory()
+    # Step 3: Initialize conversation memory and load past chats
+    memory = ConversationBufferWindowMemory(k=CHAT_API['CONVERSATION_BUFFER_WINDOW_SIZE'])
+    conversationSummaryMemory= ConversationSummaryBufferMemory(llm=llm, max_token_limit=CHAT_API["CHAT_SUMMARY_MAX_TOKEN"])
 
     if past_chat:
         # Extract messages from the single Message instance
@@ -95,12 +102,14 @@ def get_openai_response(user, chat_id, question):
                 }
             )
 
-    # Step 3: Set up the LLM (Azure OpenAI)
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"]
-    )
+            conversationSummaryMemory.save_context(
+                {
+                    "input": message.get("question", "")
+                },
+                {
+                    "output": message.get("result", "")
+                }
+            )    
 
     # Step 4: Generate the response using the memory context
     conversation = ConversationChain(
@@ -119,6 +128,20 @@ def get_openai_response(user, chat_id, question):
         "result": result
     }
     
+    conversationSummaryMemory.save_context(
+        {
+            "input": question
+        },
+        {
+            "output": result
+        }
+    )
+    
+    # Step 6: get the chat summary
+    summary = conversationSummaryMemory.load_memory_variables({})
+    
+    print('\n summary-----',summary)
+    
     if past_chat:
         # Update the messages list from the single Message instance
         messages.append(new_message)
@@ -126,26 +149,35 @@ def get_openai_response(user, chat_id, question):
         # No past chat, create a new list with the current message
         messages = [new_message]
 
-    # Step 6: Save both the user input and system response in the chat history
-    create_chat(user, chat_id, messages)
+    # Step 7: Save both the user input and system response in the chat history with summary
+    create_chat(user, chat_id, messages, summary, chat_label=question)
 
     return result
 
 
 
-def create_chat(user, chat_id, messages, chat_label=''):
+def create_chat(user, chat_id, messages, summary='', chat_label=''):
     """
-    Saves or updates a chat message to the database, including updated_at timestamp.
+    Saves or updates a chat message to the database, without updating chat_label after creation.
     """
 
-    # Create or update the message in the database
-    Message.objects.update_or_create(
-        user=user,
-        chat_id=chat_id,
-        chat_label= chat_label,
-        defaults={
-            'messages': messages,
-        }
-    )
+    # Check if the chat already exists
+    chat_exists = Message.objects.filter(chat_id=chat_id).exists()
+
+    # If chat exists, update the messages and summary, without touching chat_label
+    if chat_exists:
+        Message.objects.filter(chat_id=chat_id).update(
+            messages=messages,
+            summary=summary
+        )
+    else:
+        # If chat does not exist, create a new one with chat_label
+        Message.objects.create(
+            user=user,
+            chat_id=chat_id,
+            chat_label=chat_label,
+            messages=messages,
+            summary=summary
+        )
 
 
