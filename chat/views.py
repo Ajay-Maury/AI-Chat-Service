@@ -2,9 +2,10 @@ import json
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import api_view
-from .models import User
+from .models import User, Message
 from .serializers import UserSerializer, MessageSerializer
 from .services import get_or_update_user, fetch_chat, get_openai_response
+from django.shortcuts import get_object_or_404
 
 
 @api_view(['POST'])
@@ -28,8 +29,7 @@ def chat(request):
     user_id = data.get('user_id')
     chat_id = data.get('chat_id')
     question = data.get('text')
-    
-    print(type(user_id))
+
     # Fetch user by ID
     user = User.objects.get(id=user_id)
     print('\n user ---', user)
@@ -40,8 +40,28 @@ def chat(request):
 
 
 @api_view(['GET'])
-def get_chat_history(request, chat_id):
+def get_chat(request, chat_id):
     print('\n chat_id -------', chat_id)
     chat_history = fetch_chat(chat_id)
     serializer = MessageSerializer(chat_history)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+def get_user_chat_history(request, user_id):
+    print('\n get_user_chat_history user_id -----', user_id)
+    # Ensure the user exists or return 404
+    user = get_object_or_404(User, id=user_id)
+    
+    print('\n user', user)
+
+    # Fetch all chat history for the user, ordered by created_at in descending order
+    chat_history = Message.objects.filter(user=user,is_active=True).order_by('-created_at').values('chat_id', 'chat_label', 'created_at')
+    print('\n chat_history------', chat_history)
+
+    # Check if any chat history exists
+    if not chat_history.exists():
+        return Response({"detail": "No chat history found for this user."}, status=status.HTTP_404_NOT_FOUND)
+
+    # Return the chat_id and chat_label fields
+    return Response(chat_history, status=status.HTTP_200_OK)
