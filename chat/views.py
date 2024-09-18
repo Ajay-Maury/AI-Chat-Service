@@ -22,6 +22,27 @@ def login_signup(request):
     else:
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+
+@api_view(['POST'])
+def get_user(request):
+    # Extract email from the request
+    email = request.data.get('email')   
+    print('\n email:-------', email)
+
+    # Check if email is provided
+    if not email:
+        return Response({"error": "Email is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Fetch the user by email or return 404 if not found
+    user = get_object_or_404(User, email=email)
+    
+    # Serialize the user data
+    serializer = UserSerializer(user)
+    
+    # Return the serialized data with a 200 OK status
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 @api_view(['POST'])
 def chat(request):
     data = json.loads(request.body)
