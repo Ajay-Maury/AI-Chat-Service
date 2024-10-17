@@ -1,5 +1,5 @@
 from langchain.memory import ConversationSummaryBufferMemory
-from langchain_core.messages import HumanMessage, SystemMessage,trim_messages
+from langchain_core.messages import HumanMessage, SystemMessage, trim_messages
 from chat.serializers import MessageSerializer, UserSerializer
 from .models import Message, User
 from operator import itemgetter
@@ -101,6 +101,7 @@ def get_openai_response(user, chat_id, question):
         temperature=CHAT_API["TEMPERATURE"],
         max_tokens=CHAT_API["MAX_TOKENS"],
     )
+
     
     # Initialize Conversation Summary Buffer Memory for tracking conversation context
     conversationSummaryMemory = ConversationSummaryBufferMemory(
