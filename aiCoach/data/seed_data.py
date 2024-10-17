@@ -62,7 +62,7 @@ for category_info in category_data:
     )
     for level in range(1, 5): # Create Category Levels for each category
         CategoryLevel.objects.create(
-            category=category,  # Pass the actual Category instance
+            category=category_info['category'],  # Pass the actual Category instance
             level=level,
             description=f"Description for level {level} of {category_info['category']}.",
             examples=f"Examples for level {level} of {category_info['category']}.",

@@ -19,7 +19,7 @@ from aiCoach.serializers import (UserCallStatementsWithLevelSerializer, Category
                                  UserConversationHistorySerializer, UserGoalSerializer, UserPerformanceDataSerializer)
 from langchain.globals import set_debug
 
-set_debug(True)
+# set_debug(True)
 
 load_dotenv()
 
@@ -104,17 +104,17 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
         )
 
     # Print the formatted string
-    print("\n chat_history---", chat_history)
+    print("\n chat_history-------", chat_history)
 
     
     call_statements = UserCallStatementsWithLevelSerializer(user_call_statements(user_id), many=True).data
-    print("\n call_statements", call_statements)
+    # print("\n call_statements", call_statements)
 
     user_goal = UserGoalSerializer(get_user_goal(user_id)).data
-    print("\n user_goal", user_goal)
+    print("\n user_goal--------", user_goal)
     
     user_performance_data = UserPerformanceDataSerializer(get_user_performance_data(user_id), many=True).data
-    print("\n user_performance_data", user_performance_data)
+    print("\n user_performance_data-------", user_performance_data)
 
     performance_data =  {
         "skills": user_performance_data,
@@ -132,9 +132,10 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
 
     # Iterate through the steps and call the respective coaching function if the step is not completed
     for step, coach_function in steps.items():
+        print()
         if not conversation_history_serialized[0][step]:
             result = coach_function(user_name, user_message, user_goal, performance_data, chat_history)
-            print("\n result", result)
+            print("\n result----------", result)
 
             # Add the new messages to the conversation history
             if user_message and user_message.strip():  # Check if user_message is not empty or just whitespace
@@ -239,23 +240,24 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
           •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
           •	You ask one question at a time.
           •	You keep replies short, less than 30 words.
+          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
         \n\n
         Coaching session data:
         GOAL: !!!{goal}!!!\n
         Performance Data: ###{performance_data}###\n
 
         \n
-        INSTRUCTION
+        INSTRUCTION FOR GOALS: This is STEP 1, do not go any further! ONE QUESTION AT A TIME!\n
           1.	Read and understand {user_name} goal and performance data in the
-                Performance Data mentioned just above
-          2.	Exchange pleasantries with {user_name}.
-          3.	Summarise progress to date {user_name}.
-          4.	Share the current coaching goal with {user_name} and confirm it’s still valid:
-              ⁃	Is the goal we set previously still valid?
-              ⁃	Are we okay to continue with the current coaching goal?
-              ⁃	Is the goal we’ve been working on still okay?
-          5.	If yes, thank {user_name} and tell them the coaching process will pause for a few seconds before we continue with the next step: REALITY.
-          6.	If no, explore {user_name}’s thinking on what they want to change about the coaching goal:
+                Performance Data mentioned just above\n
+          2.	Exchange pleasantries with {user_name} first.\n
+          3.	Once exchange of pleasantries is done, Summarise progress to date {user_name}.\n
+          4.	Share the current coaching goal with {user_name} and confirm it’s still valid:\n
+              ⁃	Is the goal we set previously still valid?\n
+              ⁃	Are we okay to continue with the current coaching goal?\n
+              ⁃	Is the goal we’ve been working on still okay?\n
+          5.	If yes, thank {user_name} and tell them the coaching process will pause for a few seconds before we continue with the next step: REALITY.\n
+          6.	If no, explore {user_name}’s thinking on what they want to change about the coaching goal:\n
               ⁃	Are they focused on the wrong skill or is the goal the wrong one?
               ⁃	Would they like to focus on something else today?
               ⁃	Did they want to skip coaching for today?
@@ -297,7 +299,7 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
         format_instructions=partial_variables["format_instructions"]
     ))
     
-    print("\n response", response)
+    # print("\n response", response)
 
     return parse_response(response.content)
 
@@ -335,6 +337,7 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
           •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
           •	You ask one question at a time.
           •	You keep replies short, less than 30 words.
+          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
           \n\n
         
         Coaching session data:
@@ -391,10 +394,10 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
         format_instructions=partial_variables["format_instructions"]
     ))
     
-    print("\n response", response)
+    # print("\n response", response)
 
     result = parse_response(response.content)
-    print("\n result", result)
+    # print("\n result", result)
     return result
  
 
@@ -417,7 +420,7 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
         "format_instructions": parser.get_format_instructions(),
       }
 
-    category_levels = CategoryLevel.objects.filter(category=goal['category'])
+    category_levels = CategoryLevel.objects.filter(category=goal["category"])
     
     prompt_template = (""" 
        ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
@@ -434,6 +437,7 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
           •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
           •	You ask one question at a time.
           •	You keep replies short, less than 30 words.
+          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
           \n\n
         
         Coaching session data:
@@ -443,7 +447,7 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
         Category Level Data: {category_level_data}
         \n\n
                   
-        ### INSTRUCTION FOR REALITY - This is step 2, do not go any further! ONE QUESTION AT A TIME!
+        ### INSTRUCTION FOR Option - This is step 3, do not go any further! ONE QUESTION AT A TIME!
         1. Acknowledge the COACHING GOAL and the focus on improving skills.
         2. Explore with {user_name} what happened in the last call, focusing on the behaviours related to the coaching goal.
         3. Confirm the agreed behaviour that happened in the last call and its level, Not Observed, Foundational, Developing or Accomplished.
@@ -490,10 +494,10 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
         format_instructions=partial_variables["format_instructions"]
     ))
     
-    print("\n response", response)
+    # print("\n response", response)
 
     result = parse_response(response.content)
-    print("\n result", result)
+    # print("\n result", result)
     return result
  
 
@@ -534,6 +538,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
           •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
           •	You ask one question at a time.
           •	You keep replies short, less than 30 words.
+          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
         \n\n
         Coaching session data:
         GOAL: {goal}
@@ -542,7 +547,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         Category Level Data: {category_level_data}
         \n\n
         
-        ### INSTRUCTION FOR Option stage(Improvement) - This is step 2, do not go any further! ONE QUESTION AT A TIME!
+        ### INSTRUCTION FOR Option stage(Improvement) - This is step 4, do not go any further! ONE QUESTION AT A TIME!
         1. Acknowledge the COACHING GOAL and the focus on improving skills.
         2. Based on the decision for improving or repeating the behaviour in the last call of the user, you will need to train the {user_name} 
         3. Use mix of the following Approaches
@@ -598,10 +603,10 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         format_instructions=partial_variables["format_instructions"]
     ))
     
-    print("\n response", response)
+    # print("\n response", response)
 
     result = parse_response(response.content)
-    print("\n result", result)
+    # print("\n result", result)
     return result
 
 
@@ -645,7 +650,7 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
         Performance Data: {performance_data}
         \n\n
         
-        INSTRUCTION FOR COACHING FLOW - WILL
+        INSTRUCTION FOR COACHING FLOW - WILL. - This is step 5 and end Step, do not go any further! ONE QUESTION AT A TIME!
           1.	Confirm the behaviours {user_name}’s wants to use in the next call or future.
           2.	Ask how they will ensure they implement the ideas they developed. Use questions like these:
               ⁃	Having settled on what to do in your next call, how will you ensure you remember to do it?
@@ -699,10 +704,10 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
         format_instructions=partial_variables["format_instructions"]
     ))
     
-    print("\n response", response)
+    # print("\n response", response)
 
     result = parse_response(response.content)
-    print("\n result", result)
+    # print("\n result", result)
     return result
  
 

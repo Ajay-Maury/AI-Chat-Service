@@ -54,7 +54,7 @@ class Category(models.Model):
 
 # Category Level Model
 class CategoryLevel(models.Model):
-    category = models.ForeignKey(Category, on_delete=models.CASCADE, related_name='levels')
+    category = models.CharField(max_length=20, choices=CATEGORY_TYPES)
     level = models.IntegerField(choices=LEVEL_CHOICES) 
     description = models.TextField( blank=True, null=True)
     examples = models.TextField( blank=True, null=True)
@@ -66,8 +66,8 @@ class CategoryLevel(models.Model):
     class Meta:
         unique_together = ('category', 'level')  # Prevent duplicate levels for the same category
 
-    def __str__(self):
-        return f"{self.category.category} - Level: {self.level}"
+    # def __str__(self):
+    #     return f"{self.category} - Level: {self.level}"
 
 
 # Category Level Example Model
