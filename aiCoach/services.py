@@ -201,7 +201,7 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
 
             # Save conversation history 
             conversation_history_payload['messages'] = messages
-            save_conversation(user_id, chat_id, conversation_history_payload)
+            save_conversation(user_id, chat_id, conversation_history_payload, conversation_history_serialized[0])
 
             return result
 
@@ -247,27 +247,33 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
         Performance Data: ###{performance_data}###\n
 
         \n
-        INSTRUCTION FOR GOALS: This is STEP 1, do not go any further! ONE QUESTION AT A TIME!\n
-          1.	Read and understand {user_name} goal and performance data in the
-                Performance Data mentioned just above\n
-          2.	Exchange pleasantries with {user_name} first.\n
-          3.	Once exchange of pleasantries is done, Summarise progress to date {user_name}.\n
-          4.	Share the current coaching goal with {user_name} and confirm it’s still valid:\n
-              ⁃	Is the goal we set previously still valid?\n
-              ⁃	Are we okay to continue with the current coaching goal?\n
-              ⁃	Is the goal we’ve been working on still okay?\n
-          5.	If yes, thank {user_name} and tell them the coaching process will pause for a few seconds before we continue with the next step: REALITY.\n
-          6.	If no, explore {user_name}’s thinking on what they want to change about the coaching goal:\n
-              ⁃	Are they focused on the wrong skill or is the goal the wrong one?
-              ⁃	Would they like to focus on something else today?
-              ⁃	Did they want to skip coaching for today?
-          7.	To change goal, let {user_name} know that is acceptable and there will be a pause for a few seconds before we continue with the next step: GOAL SETTING.
-          8.	To change goal for today, let {user_name} know that is acceptable and ask what skill they would like to focus on, Opening, Questioning, Presenting, Closing and let them know there will be a pause for a few seconds before we continue with the next step: REALITY
-          9.	Skipping coaching for the last call is fine, close down the coaching session, wish {user_name} well and let them know you’re looking forward to the next coaching session.
-          2.	PAUSE HERE AND WAIT FOR THE NEXT PROMPT.
-          3.	DO NOT ATTEMPT TO MOVE ON.
-          4.	STOP.
-          5.	Even if {user_name} keeps trying to interact - STOP!
+        INSTRUCTION FOR GOALS: This is STEP 1, do not go any further! ONE QUESTION AT A TIME!
+            1. Read and understand {user_name}'s goal and performance data in the Performance Data mentioned just above.
+            2. Exchange pleasantries with {user_name} first.
+               - Example: "Hello {user_name}, it's great to see you again! How have you been?"
+            3. Once exchange of pleasantries is done, summarize {user_name}'s progress to date.
+               - Example: "Let's take a moment to review your progress. You've been working hard on {goal['description']}, and I'm eager to hear how things are going."
+            4. Share the current coaching goal with {user_name} and confirm it’s still valid:
+               - "Is the goal we set previously still valid?"
+               - "Are we okay to continue with the current coaching goal?"
+               - "Is the goal we’ve been working on still okay?"
+            5. If yes, thank {user_name} and tell them the coaching process will pause for a few seconds before we continue with the next step: REALITY.
+               - "Thank you, {user_name}. We'll take a short pause before moving on to discuss the reality of achieving your goal."
+            6. If no, explore {user_name}'s thinking on what they want to change about the coaching goal:
+               - "Are you focused on the wrong skill, or is the goal the wrong one?"
+               - "Would you like to focus on something else today?"
+               - "Did you want to skip coaching for today?"
+            7. To change the goal, let {user_name} know that is acceptable and there will be a pause for a few seconds before we continue with the next step: GOAL SETTING.
+               - "That's completely fine, {user_name}. Let's take a moment to reset our focus. What aspect would you like to concentrate on today?"
+            8. To change goal for today, let {user_name} know that is acceptable and ask what skill they would like to focus on, such as Opening, Questioning, Presenting, or Closing, and let them know there will be a pause for a few seconds before we continue with the next step: REALITY.
+               - "Understood. Which specific skill would you like to focus on today—Opening, Questioning, Presenting, or Closing?"
+            9. Skipping coaching for the last call is fine, close down the coaching session, wish {user_name} well and let them know you’re looking forward to the next coaching session.
+               - "No worries at all, {user_name}. I hope you have a great day ahead, and I look forward to our next session together!"
+            
+        PAUSE HERE AND WAIT FOR THE NEXT STEP: Reality.
+        DO NOT ATTEMPT TO MOVE ON.
+        STOP.
+        Even if {user_name} keeps trying to interact - STOP!
         \n\n
         Response must ONLY be in the following pure JSON format, without any extra text: \n ###{format_instructions}### \n
         Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
@@ -513,7 +519,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         max_tokens=CHAT_API["MAX_TOKENS"],
     )
     
-    input_variables=["user_name", "goal", "performance_data", ],
+    input_variables=["user_name", "goal", "performance_data", "category_level_data"],
 
     parser = PydanticOutputParser(pydantic_object=ChatParser)
     partial_variables = {
@@ -552,8 +558,8 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         2. Based on the decision for improving or repeating the behaviour in the last call of the user, you will need to train the {user_name} 
         3. Use mix of the following Approaches
             APPROACH 1: OWN IDEAS
-              ⁃	Are you familiar with the user's goal level behaviours?
-              ⁃	Can you think of an user's goal level behaviour?
+              ⁃	Are you familiar with the {user_name}'s goal level behaviours?
+              ⁃	Can you think of an {user_name}'s goal level behaviour?
               ⁃	Have you got any ideas what you could do in your next call?
             APPROACH 2: PAST SUCCESSES
               ⁃	Have you ever seen an HCP before, who’s similar to that one, where you were successful? Can you remember what you did then?
@@ -562,7 +568,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
             APPROACH 3: OTHERS
               ⁃	Do you know if any of your colleagues have a favourite question? Do you know what it is?
               ⁃	Have you ever heard one of your teammates use a great question at a selling village or during training events?
-              ⁃	I heard a rep do this once, [user's goal level examples], what do you think?
+              ⁃	I heard a rep do this once, [{user_name}'s goal level examples], what do you think?
         4. If {user_name} asks for help or suggestions, start by asking reflective questions to guide them in exploring their own thoughts.
             Avoid offering specific solutions right away, try to give analogy, and if the user still dont understand give them the specific solution after 2-3 tries.
         5. Once the training is finished for all the statements used by {user_name} in the last call, you can move on.
@@ -600,6 +606,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
+        category_level_data=category_levels,
         format_instructions=partial_variables["format_instructions"]
     ))
     
@@ -712,7 +719,7 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
  
 
 
-def save_conversation(user_id, chat_id, conversation_data):
+def save_conversation(user_id, chat_id, conversation_data, previous_conversation_data):
     try:
         user = User.objects.get(id=int(user_id))
     except ObjectDoesNotExist:
@@ -721,11 +728,11 @@ def save_conversation(user_id, chat_id, conversation_data):
     messages = conversation_data.get('messages', [])
     summary = conversation_data.get('summary', [])
     chat_label = conversation_data.get('chat_label', [])
-    isGoalStepCompleted = conversation_data.get('isGoalStepCompleted', False)
-    isRealityStepCompleted = conversation_data.get('isRealityStepCompleted', False)
-    isOptionStepCompleted = conversation_data.get('isOptionStepCompleted', False)
-    isOptionImprovementStepCompleted = conversation_data.get('isOptionImprovementStepCompleted', False)
-    isWillStepCompleted = conversation_data.get('isWillStepCompleted', False)
+    isGoalStepCompleted = conversation_data.get('isGoalStepCompleted', False) | previous_conversation_data.get('isGoalStepCompleted', False)
+    isRealityStepCompleted = conversation_data.get('isRealityStepCompleted', False) | previous_conversation_data.get('isRealityStepCompleted', False)
+    isOptionStepCompleted = conversation_data.get('isOptionStepCompleted', False) | previous_conversation_data.get('isOptionStepCompleted', False)
+    isOptionImprovementStepCompleted = conversation_data.get('isOptionImprovementStepCompleted', False) | previous_conversation_data.get('isOptionImprovementStepCompleted', False)
+    isWillStepCompleted = conversation_data.get('isWillStepCompleted', False) | previous_conversation_data.get('isWillStepCompleted', False)
     is_active = conversation_data.get('is_active', True)
 
 
