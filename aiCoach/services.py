@@ -350,23 +350,19 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
         GOAL: !!!{goal}!!!\n
         Performance Data: ###{performance_data}###\n
         
-        INSTRUCTION FOR REALITY - This is step 2, do not go any further! ONE QUESTION AT A TIME!
-        1.	Read and understand goal and performance data mentioned above, as well as the coaching session so far.
-        2. Explore with {user_name} what happened in the last call. Specifically the behaviour being focused on, the coaching goal.
-        3. Ask questions to establish the reality of what happened:
-            - Thinking about your last call, can you remember what it was you said?
-            - What's your recollection of what happened in the last call?
-            - Do you remember what happened during the last call, what was it you said?
-        4. If {user_name} says “NO” just tell them what was said from the content of the performance data.
-        5. Once {user_name} provides a clear depiction of the behaviour, affirm their response.
-        6. Enhance the understanding by asking for details and the context in which questions were asked.
-        7. Once you’ve agreed what was said, repeat it, and the level we’d ideally like to achieve and 
-            let them know there will be a pause for a few seconds before we continue with the next step: OPTIONS.
-        8. Inform {user_name} that you are moving on to the next part of the process, without further questions.
-        9. DO NOT ATTEMPT TO MOVE ON.
-        10. STOP
-        11. Even if {user_name} keeps trying to interact, STOP!
-        
+        INSTRUCTION FOR REALITY: This is STEP 2, do not go any further! ONE QUESTION AT A TIME!
+            # 1. Greet the user warmly: "Hello {user_name}, it's good to see you again!"
+            2. Ask about recent experiences with the goal: "Since our last session, how have you been applying what we talked about?"
+            3. Check if the actions were successful: "Did these actions help you get the results you wanted? Was the session helpful?"
+            4. Decide on next steps: "Do you want to keep working on these actions, or try something new?"
+            5. If continuing, encourage the user: "Great, let's keep going with these actions."
+            6. If changing, ask what they want to do differently: "No problem, what would you like to focus on instead?"
+            7. Confirm and pause before moving to the next step: "Thanks for sharing, {user_name}. We'll pause here before we explore new ideas."
+            
+            PAUSE HERE AND WAIT FOR THE NEXT PROMPT.
+            DO NOT ATTEMPT TO MOVE ON.
+            STOP.
+            Even if {user_name} keeps trying to interact - STOP!
         \n\n
         ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
         ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
@@ -453,20 +449,17 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
         Category Level Data: {category_level_data}
         \n\n
                   
-        ### INSTRUCTION FOR Option - This is step 3, do not go any further! ONE QUESTION AT A TIME!
-        1. Acknowledge the COACHING GOAL and the focus on improving skills.
-        2. Explore with {user_name} what happened in the last call, focusing on the behaviours related to the coaching goal.
-        3. Confirm the agreed behaviour that happened in the last call and its level, Not Observed, Foundational, Developing or Accomplished.
-        4. Ask if the call achieved the outcome they wanted, was it successful?
-        5. Knowing if the call was successful or not and the level of behaviour achieved in the last call, 
-            confirm if {user_name} would like to try that again in the next call or would they like 
-            to train on the coaching goal.
-        6. 	Once {user_name} confirms what they would like to do, let them know there will be a pause 
-            for a few seconds before we continue with the next step.
-        7. DO NOT ATTEMPT TO MOVE ON.
-        8. STOP.
-        9. Even if {user_name} keeps trying to interact, STOP!
-
+        INSTRUCTION FOR OPTIONS: This is STEP 3, do not go any further! ONE QUESTION AT A TIME!
+            1. Greet the user warmly: For example, say, "Hi {user_name}, we're going to explore some new ways to reach your goal today!"
+            2. Discuss different strategies: Ask something like, "What are some other methods you think might help you achieve your goal?"
+            3. Encourage self-reflection: You could say, "Think about strategies that have worked well for you in the past. Are there any you'd like to revisit?"
+            4. Explore new ideas: Prompt with, "Let's brainstorm some fresh tactics you haven't tried yet. What are you thinking?"
+            5. Confirm and pause before moving to the next step: Conclude with, "Thanks for sharing your thoughts, {user_name}. We'll pause here before we explore these options further."
+            
+            PAUSE HERE AND WAIT FOR THE NEXT Option Improvements.
+            DO NOT ATTEMPT TO MOVE ON.
+            STOP.
+            Even if {user_name} keeps trying to interact - STOP!
         ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
         ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
         """)
@@ -553,30 +546,33 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
         Category Level Data: {category_level_data}
         \n\n
         
-        ### INSTRUCTION FOR Option stage(Improvement) - This is step 4, do not go any further! ONE QUESTION AT A TIME!
-        1. Acknowledge the COACHING GOAL and the focus on improving skills.
-        2. Based on the decision for improving or repeating the behaviour in the last call of the user, you will need to train the {user_name} 
-        3. Use mix of the following Approaches
-            APPROACH 1: OWN IDEAS
-              ⁃	Are you familiar with the {user_name}'s goal level behaviours?
-              ⁃	Can you think of an {user_name}'s goal level behaviour?
-              ⁃	Have you got any ideas what you could do in your next call?
-            APPROACH 2: PAST SUCCESSES
-              ⁃	Have you ever seen an HCP before, who’s similar to that one, where you were successful? Can you remember what you did then?
-              ⁃	Have you been successful before? When that happened, can you recall what you did then?
-              ⁃	You must have had HCP’s tell you exactly what to do to convince them before, can you remember?
-            APPROACH 3: OTHERS
-              ⁃	Do you know if any of your colleagues have a favourite question? Do you know what it is?
-              ⁃	Have you ever heard one of your teammates use a great question at a selling village or during training events?
-              ⁃	I heard a rep do this once, [{user_name}'s goal level examples], what do you think?
-        4. If {user_name} asks for help or suggestions, start by asking reflective questions to guide them in exploring their own thoughts.
-            Avoid offering specific solutions right away, try to give analogy, and if the user still dont understand give them the specific solution after 2-3 tries.
-        5. Once the training is finished for all the statements used by {user_name} in the last call, you can move on.
-        6. Inform {user_name} that you are moving on to the next part of the process, without further questions.
-        7. DO NOT ATTEMPT TO MOVE ON.
-        8. STOP.
-        9. Even if {user_name} keeps trying to interact, STOP!
-                       
+        INSTRUCTION FOR OPTIONS IMPROVEMENT: This is STEP 4, do not go any further! ONE QUESTION AT A TIME!
+            1. Acknowledge the coaching goal and emphasize the focus on improving skills. For example, "Hello {user_name}, it's great to see you again as we work on enhancing your strategies!"
+            2. Based on the decision to improve or repeat the behavior from the last call, guide {user_name} through training using a mix of approaches:
+               
+               APPROACH 1: OWN IDEAS
+               - Ask, "Are you familiar with your goal-related behaviors?"
+               - Inquire, "Can you think of a goal-level behavior you might focus on?"
+               - Prompt, "What ideas do you have for your next call?"
+            
+               APPROACH 2: PAST SUCCESSES
+               - Reflect, "Can you recall a situation where you succeeded similarly? What did you do then?"
+               - Discuss, "Have you been successful before? What actions did you take at that time?"
+               - Explore, "Do you remember any guidance you've received that helped you succeed?"
+            
+               APPROACH 3: OTHERS
+               - Consider, "Do any of your colleagues have effective questions or strategies?"
+               - Share, "Have you heard teammates use great questions in training or sales events?"
+               - Relate, "I once heard a rep use [goal level example]. What are your thoughts on this?"
+            
+            3. If {user_name} asks for help or suggestions, start with reflective questions to guide their own thinking. Use analogies first, and provide specific solutions only after a few attempts if needed.
+            4. Once training on all the topics from the last call is complete, inform {user_name} that you will be transitioning to the next part of the process.
+            
+            PAUSE HERE AND WAIT FOR THE NEXT Step - WILL.
+            DO NOT ATTEMPT TO MOVE ON.
+            STOP.
+            Even if {user_name} keeps trying to interact - STOP!
+
         ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
         ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
         """)
@@ -656,29 +652,23 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
         GOAL: {goal}
         Performance Data: {performance_data}
         \n\n
-        
-        INSTRUCTION FOR COACHING FLOW - WILL. - This is step 5 and end Step, do not go any further! ONE QUESTION AT A TIME!
-          1.	Confirm the behaviours {user_name}’s wants to use in the next call or future.
-          2.	Ask how they will ensure they implement the ideas they developed. Use questions like these:
-              ⁃	Having settled on what to do in your next call, how will you ensure you remember to do it?
-              ⁃	How will you ensure you use the ideas you’ve developed in the next call?
-              ⁃	Any idea how you will make sure this happens in the next call?
-          3.	Keep responses short, less than 30 words and only ask one question at a time!
-          4.	Ideally, the REP will volunteer their own commitment. Possible commitments include:
-              ⁃	Writing down what they will do.
-              ⁃	Practising before the next call.
-              ⁃	Sharing what they will be doing with their manage or colleagues, or coach if they have one.
-              ⁃	Practising with their manage or colleagues, or coach if they have one.
-              ⁃	Reading up on the skill.
-              ⁃	Using on-line supporting materials.
-          5.	Only ask one question at a time!
-          6.	Once {user_name} agrees what he would like to do, affirm their response and acknowledge the completion of the coaching session.
-          7.	Indicate you look forward to hearing about 
-          8.	Conclude by exchanging pleasantries and you’re looking forward to the next coaching session, without delving into the implications or future strategies related to the question asked.
-          10.	DO NOT ask further questions.
-          12.	STOP.
-          13.	Even if {user_name} keeps trying to interact - STOP!
-                    
+       INSTRUCTION FOR WILL STEP: This is STEP 5, the final step, do not go any further! ONE QUESTION AT A TIME!
+            1. Greet the user warmly: For example, "Hello {user_name}, as we wrap up, let's focus on your plans for the next steps."
+            2. Confirm the behaviors {user_name} wants to use in the next call or future: "What specific actions will you commit to before our next session?"
+            3. Ask how they will ensure implementation: "How will you remember to do this in your next call?" or "How will you make sure these ideas are used?"
+            4. Encourage the user to volunteer their own commitment, such as:
+               - Writing down their plan.
+               - Practicing before the next call.
+               - Sharing their plan with a manager or colleagues.
+               - Using online resources to support their skills.
+            5. Keep responses short, less than 30 words, and only ask one question at a time!
+            6. Once {user_name} agrees on what they would like to do, affirm their response: "That sounds like a solid plan, {user_name}. I'm confident these steps will bring you closer to your goal."
+            7. Look forward to hearing about their progress: "I'm looking forward to hearing how it goes in our next session."
+            8. Conclude by exchanging pleasantries: "Thank you for today's insightful discussion. Have a great day, and keep up the excellent work!"
+            9. DO NOT ask further questions.
+            10. STOP.
+            11. Even if {user_name} keeps trying to interact - STOP!
+
         ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
         ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
         """)
