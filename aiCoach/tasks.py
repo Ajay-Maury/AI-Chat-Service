@@ -95,10 +95,9 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
         conversation_data['chat_label'] = chat_label_result["chatLabel"]
 
     # Save the updated conversation, including the chat label, messages, and summary
-    save_conversation.delay(user_id, chat_id, conversation_data, previous_conversation_data)
+    save_conversation(user_id, chat_id, conversation_data, previous_conversation_data)
 
 
-@shared_task
 def save_conversation(user_id, chat_id, conversation_data, previous_conversation_data):
     print(" inside save_conversation ")
     print(user_id)
