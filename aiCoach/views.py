@@ -4,7 +4,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from django.shortcuts import get_object_or_404
 
-from aiCoach.models import User, UserConversationHistory
+from aiCoach.models import COACHING_PROMPT_TYPES, CoachingPrompt, User, UserConversationHistory
 from aiCoach.services import (create_category, create_category_level,
   create_category_level_example, create_user_call_statements, create_user_performance_data, create_user_goal,
   get_all_categories, get_all_category_level_examples, get_all_category_levels, get_conversation, get_or_update_user, user_call_statements,
@@ -14,6 +14,7 @@ from aiCoach.serializers import (
     CategorySerializer,
     CategoryLevelSerializer,
     CategoryLevelExampleSerializer,
+    CoachingPromptSerializer,
     UserCallStatementsWithLevelSerializer,
     UserConversationHistorySerializer,
     UserGoalSerializer,
@@ -176,6 +177,44 @@ def get_performance_data_view(request):
     performance_data = get_user_performance_data()
     serializer = UserPerformanceDataSerializer(performance_data, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['GET'])
+def get_coaching_prompts_view(request):
+    coaching_prompt_data = CoachingPrompt.objects.filter(is_active=True)
+    serializer = CoachingPromptSerializer(coaching_prompt_data, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@api_view(['POST'])
+def create_coaching_prompts_view(request):
+    data = request.data
+    print("\n create_coaching_prompts data", data)
+
+    category = data.get('category')
+    prompt = data.get('prompt')
+
+    if not category or not prompt:
+        return Response({"error": "Category and prompt are required fields."}, status=status.HTTP_400_BAD_REQUEST)  
+    
+    # Validate that the category is one of the choices
+    valid_categories = [choice[0] for choice in COACHING_PROMPT_TYPES]
+    if category not in valid_categories:
+        return Response({"error": f"Invalid category. Choose from: {valid_categories}"}, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Create or update the CoachingPrompt
+    coaching_prompt, created = CoachingPrompt.objects.update_or_create(
+        category=category,
+        defaults={
+            'prompt': prompt,
+            'is_active': data.get('is_active', True)
+        }
+    )
+
+    # Serialize the result and return it
+    serializer = CoachingPromptSerializer(coaching_prompt)
+    if created:
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    else:
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])

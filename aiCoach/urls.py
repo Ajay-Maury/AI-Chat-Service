@@ -1,9 +1,9 @@
 # urls.py
 from django.urls import path
 from aiCoach.views import (coach_chat, create_category_level_example_view,
-  create_category_level_view, create_category_view, create_user_call_statements_view,
+  create_category_level_view, create_category_view, create_coaching_prompts_view, create_user_call_statements_view,
   create_user_performance_data_view, create_user_goal_view, get_categories_view,
-  get_category_level_examples_view, get_category_levels_view, get_chat, get_last_calls_view,
+  get_category_level_examples_view, get_category_levels_view, get_chat, get_coaching_prompts_view, get_last_calls_view,
   get_performance_data_view, get_user, get_user_chat_history, get_user_goals_view, login_signup)
 
 urlpatterns = [
@@ -24,6 +24,9 @@ urlpatterns = [
 
     path('performance-data/', get_performance_data_view, name='get-performance-data'),
     path('performance-data/create/', create_user_performance_data_view, name='create-performance-data'),
+    
+    path('coaching-prompt/', get_coaching_prompts_view, name='get-coaching-prompt'),
+    path('coaching-prompt/create/', create_coaching_prompts_view, name='create-coaching-prompt'),
 
     path('login/', login_signup, name='login'),
     path('get-user/', get_user, name='get-user'),

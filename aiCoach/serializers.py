@@ -1,6 +1,6 @@
 # serializers.py
 from rest_framework import serializers
-from .models import Category, CategoryLevel, CategoryLevelExample, User, UserCallStatementsWithLevel, UserConversationHistory, UserGoal, UserPerformanceData
+from .models import Category, CategoryLevel, CategoryLevelExample, CoachingPrompt, User, UserCallStatementsWithLevel, UserConversationHistory, UserGoal, UserPerformanceData
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -47,3 +47,10 @@ class UserConversationHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = UserConversationHistory
         fields = ['chat_id', 'messages', 'summary', 'chat_label', 'isGoalStepCompleted', 'isRealityStepCompleted', 'isOptionStepCompleted', 'isOptionImprovementStepCompleted', 'isWillStepCompleted', 'is_active']
+
+
+class CoachingPromptSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CoachingPrompt
+        fields = '__all__'
+

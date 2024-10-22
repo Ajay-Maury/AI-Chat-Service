@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Category, CategoryLevel, CategoryLevelExample, User, UserCallStatementsWithLevel, UserGoal, UserPerformanceData, UserConversationHistory
+from .models import Category, CategoryLevel, CategoryLevelExample, CoachingPrompt, User, UserCallStatementsWithLevel, UserGoal, UserPerformanceData, UserConversationHistory
 
 # Custom admin for user model
 class UserAdmin(admin.ModelAdmin):
@@ -55,6 +55,13 @@ class UserConversationHistoryAdmin(admin.ModelAdmin):
     list_filter = ('chat_id', 'isGoalStepCompleted', 'isRealityStepCompleted', 'isOptionStepCompleted', 'isWillStepCompleted', 'is_active')
     ordering = ('user__id', 'created_at')
 
+# Custom admin for CoachingPrompt model
+class CoachingPromptAdmin(admin.ModelAdmin):
+    list_display = ('category', 'prompt', 'is_active', )
+    search_fields = ('category', 'is_active')
+    list_filter = ('category', 'is_active')
+    ordering = ('category', 'created_at')
+
 
 # Register all models with the admin site
 admin.site.register(User, UserAdmin)
@@ -65,3 +72,4 @@ admin.site.register(UserCallStatementsWithLevel, UserCallStatementsWithLevelAdmi
 admin.site.register(UserGoal, UserGoalAdmin)
 admin.site.register(UserPerformanceData, UserPerformanceDataAdmin)
 admin.site.register(UserConversationHistory, UserConversationHistoryAdmin)
+admin.site.register(CoachingPrompt, CoachingPromptAdmin)

@@ -1,42 +1,22 @@
-import json
-import re
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from aiCoach.models import Category, CategoryLevel, CategoryLevelExample, User, UserCallStatementsWithLevel, UserConversationHistory, UserGoal, UserPerformanceData
-from django.conf import settings  # Import the settings to access environment variables
+from aiCoach.models import COACHING_PROMPT_TYPES, Category, CategoryLevel, CategoryLevelExample, CoachingPrompt, User, UserCallStatementsWithLevel, UserConversationHistory, UserGoal, UserPerformanceData
 from langchain_core.prompts import PromptTemplate
-from langchain_openai import AzureChatOpenAI
-from rest_framework.exceptions import NotFound
-from dotenv import load_dotenv
 from langchain_core.output_parsers import PydanticOutputParser
-from aiCoach.outputParser import ChatLabelParser, ChatParser
-from aiCoach.utils import parse_response
+from aiCoach.outputParser import ChatParser
+from aiCoach.utils import CHAT_API, LLM_MODEL, parse_response
 from django.core.exceptions import ObjectDoesNotExist
 from collections import deque
-from langchain.memory import ConversationSummaryBufferMemory
 
-from aiCoach.serializers import (UserCallStatementsWithLevelSerializer, CategoryLevelSerializer,
+from aiCoach.serializers import (CoachingPromptSerializer, UserCallStatementsWithLevelSerializer, 
                                  UserConversationHistorySerializer, UserGoalSerializer, UserPerformanceDataSerializer)
 from langchain.globals import set_debug
+from aiCoach.tasks import async_save_conversation
 
 # set_debug(True)
 
-load_dotenv()
-
-# Azure OpenAI Configurations (from your settings)
-CHAT_API = {
-    "MODEL_DEPLOYMENT": settings.AZURE_OPENAI_DEPLOYMENT_NAME,  # Azure OpenAI Model
-    "MODEL_NAME": settings.AZURE_OPENAI_MODEL_NAME,
-    "OPENAI_ENDPOINT": settings.AZURE_OPENAI_ENDPOINT,
-    "OPENAI_API_VERSION": settings.AZURE_OPENAI_API_VERSION,
-    "TEMPERATURE": settings.AZURE_OPENAI_CHAT_TEMPERATURE,
-    "MAX_TOKENS": settings.AZURE_OPENAI_CHAT_MAX_TOKENS,
-    "TRIM_MAX_TOKENS": settings.AZURE_OPENAI_CHAT_MAX_TRIM_TOKENS,
-    "CONVERSATION_BUFFER_WINDOW_SIZE": settings.AZURE_OPENAI_CONVERSATION_BUFFER_WINDOW_SIZE,
-    "CHAT_SUMMARY_MAX_TOKEN": settings.AZURE_OPENAI_CHAT_SUMMARY_MAX_TOKEN,
-}
-
 print("CHAT_API", CHAT_API)
+
 
 def chat_with_coach(user_name, user_id, chat_id, user_message=""):
     # Initialize conversation history
@@ -45,29 +25,13 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
     print("\n user_message", user_message)
     print("\n chat_id", chat_id)
 
-    # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
-
-    # Initialize Conversation Summary Buffer Memory for tracking conversation context
-    conversationSummaryMemory = ConversationSummaryBufferMemory(
-        llm=llm, 
-        max_token_limit=CHAT_API["CHAT_SUMMARY_MAX_TOKEN"]
-    )
-
     # Get the user's conversation history
     conversation_history = get_conversation(chat_id)
     conversation_history_serialized = UserConversationHistorySerializer(conversation_history, many=True).data
 
     print("\n conversation_history_serialized---", conversation_history_serialized)
 
-        # Check if conversation history is empty
+    # Check if conversation history is empty
     if not conversation_history_serialized:
         print(f"No conversation history found, starting new session for chat_id: {chat_id}")
         conversation_history_serialized = [
@@ -89,19 +53,17 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
 
     print("\n messages-----", messages)
 
-    # Iterate through the messages and format them
-    for message in messages:
+    # Get the last 10 messages or fewer if available
+    last_messages = messages[-10:]  # Slices the last 10 messages from the list
+
+    # Iterate through the last messages and format them
+    for message in last_messages:
         # Safely check if the 'user' key exists and is not empty
         message_text = message.get('user', '')
         if message_text:  # If message_text is not empty
             chat_history.append(f"User: {message_text}")
     
         chat_history.append(f"Coach: {message['coach']}")
-
-        conversationSummaryMemory.save_context(
-           {"input": message_text},  # Save user input
-           {"output": message['coach']}  # Save model response
-        )
 
     # Print the formatted string
     print("\n chat_history-------", chat_history)
@@ -143,80 +105,21 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
             else:
                 messages.append({"coach": result["message"]})  # Only add coach message
 
-            conversation_history_payload = result.copy()
-
-            conversationSummaryMemory.save_context(
-                {"input": user_message},  # Save user input
-                {"output": result["message"]}  # Save model response
+            async_save_conversation.delay(
+                user_id=user_id, 
+                chat_id=chat_id, 
+                user_goal=user_goal, 
+                messages=messages, 
+                conversation_data=result, 
+                previous_conversation_data=conversation_history_serialized[0]
             )
-            summary = conversationSummaryMemory.load_memory_variables({})
 
-            print("\n summary---", summary)
-
-            conversation_history_payload["summary"] = summary
-
-
-            if(not conversation_history_serialized[0]["chat_label"]):
-                # add responses to chat_history
-                chat_history.append(f"User: {user_message}")
-                chat_history.append(f"Coach: {result["message"]}")
-
-                parser = PydanticOutputParser(pydantic_object=ChatLabelParser)
-                partial_variables = {
-                    "format_instructions": parser.get_format_instructions(),
-                }
-
-                input_variables=["conversation", "user_goal"],
-
-                prompt_template= ('''
-                    ### You are a AI assistant, you are here to help me
-                    Read the below conversation and give me a label (name to identify the conversation) for the conversation in less than 8 words \n
-                    The label should be subjective regarding to the chat and goal\n
-                    ### Coaching session data:
-                    Conversation: {conversation} \n
-                    Goal: {user_goal} \n\n
-                    ### Instruction for your output format:
-                    \nOutput: {format_instructions}\n
-                ''')
-
-                prompt = PromptTemplate(
-                    input_variables=input_variables,
-                    template=prompt_template,
-                    partial_variables=partial_variables,
-
-                )
-
-                # Use the LLM to generate a response
-                chat_label_response = llm.invoke(prompt.format(
-                    conversation=  "".join(chat_history),
-                    user_goal= user_goal,
-                    format_instructions= partial_variables["format_instructions"]
-                ))
-    
-                print("\n chat_label_response", chat_label_response)
-                chat_label_result = parse_response(chat_label_response.content)
-                print("\n chat_label_result", chat_label_result)
-
-                conversation_history_payload['chat_label'] = chat_label_result["chatLabel"]
-
-            # Save conversation history 
-            conversation_history_payload['messages'] = messages
-            save_conversation(user_id, chat_id, conversation_history_payload, conversation_history_serialized[0])
-
-            return result
+            # Return the result without waiting for the async save
+            return result        
 
 
 
 def goal_coach(user_name, user_message, goal, performance_data, conversation_history):
-     # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
 
     input_variables=["user_name", "goal", "performance_data"],
 
@@ -225,60 +128,8 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
         "format_instructions": parser.get_format_instructions(),
     }
 
-    prompt_template = ("""
-        ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
-        You are coaching {user_name} after a pharma sales call.
-        YOUR COACHING PROFILE - THIS IS HOW YOU BEHAVE
-          •	My coaching profile - This is how I behave.
-          •	You are compassionate, speak in a positive manner and encouraging.
-          •	Always use the descriptions and not the level numbers.
-          ⁃	Level 1, Not Observed
-          ⁃	Level 2, Foundational
-          ⁃	Level 3, Developing
-          ⁃	Level 4, Accomplished - This is the target level for all coaching.
-          •	you are NEVER rude and always diplomatic.
-          •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
-          •	You ask one question at a time.
-          •	You keep replies short, less than 30 words.
-          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
-        \n\n
-        Coaching session data:
-        GOAL: !!!{goal}!!!\n
-        Performance Data: ###{performance_data}###\n
-
-        \n
-        INSTRUCTION FOR GOALS: This is STEP 1, do not go any further! ONE QUESTION AT A TIME!
-            1. Read and understand {user_name}'s goal and performance data in the Performance Data mentioned just above.
-            2. Exchange pleasantries with {user_name} first.
-               - Example: "Hello {user_name}, it's great to see you again! How have you been?"
-            3. Once exchange of pleasantries is done, summarize {user_name}'s progress to date.
-               - Example: "Let's take a moment to review your progress. You've been working hard on {goal['description']}, and I'm eager to hear how things are going."
-            4. Share the current coaching goal with {user_name} and confirm it’s still valid:
-               - "Is the goal we set previously still valid?"
-               - "Are we okay to continue with the current coaching goal?"
-               - "Is the goal we’ve been working on still okay?"
-            5. If yes, thank {user_name} and tell them the coaching process will pause for a few seconds before we continue with the next step: REALITY.
-               - "Thank you, {user_name}. We'll take a short pause before moving on to discuss the reality of achieving your goal."
-            6. If no, explore {user_name}'s thinking on what they want to change about the coaching goal:
-               - "Are you focused on the wrong skill, or is the goal the wrong one?"
-               - "Would you like to focus on something else today?"
-               - "Did you want to skip coaching for today?"
-            7. To change the goal, let {user_name} know that is acceptable and there will be a pause for a few seconds before we continue with the next step: GOAL SETTING.
-               - "That's completely fine, {user_name}. Let's take a moment to reset our focus. What aspect would you like to concentrate on today?"
-            8. To change goal for today, let {user_name} know that is acceptable and ask what skill they would like to focus on, such as Opening, Questioning, Presenting, or Closing, and let them know there will be a pause for a few seconds before we continue with the next step: REALITY.
-               - "Understood. Which specific skill would you like to focus on today—Opening, Questioning, Presenting, or Closing?"
-            9. Skipping coaching for the last call is fine, close down the coaching session, wish {user_name} well and let them know you’re looking forward to the next coaching session.
-               - "No worries at all, {user_name}. I hope you have a great day ahead, and I look forward to our next session together!"
-            
-        PAUSE HERE AND WAIT FOR THE NEXT STEP: Reality.
-        DO NOT ATTEMPT TO MOVE ON.
-        STOP.
-        Even if {user_name} keeps trying to interact - STOP!
-        \n\n
-        Response must ONLY be in the following pure JSON format, without any extra text: \n ###{format_instructions}### \n
-        Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
-    """)
-    # Define the prompt template
+    prompt_template = get_coaching_prompt("GOAL")
+    
     prompt = PromptTemplate(
         input_variables=input_variables,
         template=prompt_template,
@@ -298,7 +149,7 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
     """
 
     # Use the LLM to generate a response
-    response = llm.invoke(full_prompt.format(
+    response = LLM_MODEL.invoke(full_prompt.format(
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
@@ -310,17 +161,7 @@ def goal_coach(user_name, user_message, goal, performance_data, conversation_his
     return parse_response(response.content)
 
 
-def reality_coach(user_name, user_message, goal, performance_data, conversation_history):
-    # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
-    
+def reality_coach(user_name, user_message, goal, performance_data, conversation_history): 
     input_variables=["user_name", "goal", "performance_data"],
 
     parser = PydanticOutputParser(pydantic_object=ChatParser)
@@ -328,47 +169,8 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
         "format_instructions": parser.get_format_instructions(),
       }
     
-    prompt_template = (""" 
-        ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
-        You are coaching {user_name} after a pharma sales call.
-        YOUR COACHING PROFILE - THIS IS HOW YOU BEHAVE
-          •	My coaching profile - This is how I behave.
-          •	You are compassionate, speak in a positive manner and encouraging.
-          •	Always use the descriptions and not the level numbers.
-          ⁃	Level 1, Not Observed
-          ⁃	Level 2, Foundational
-          ⁃	Level 3, Developing
-          ⁃	Level 4, Accomplished - This is the target level for all coaching.
-          •	you are NEVER rude and always diplomatic.
-          •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
-          •	You ask one question at a time.
-          •	You keep replies short, less than 30 words.
-          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
-          \n\n
-        
-        Coaching session data:
-        GOAL: !!!{goal}!!!\n
-        Performance Data: ###{performance_data}###\n
-        
-        INSTRUCTION FOR REALITY: This is STEP 2, do not go any further! ONE QUESTION AT A TIME!
-            # 1. Greet the user warmly: "Hello {user_name}, it's good to see you again!"
-            2. Ask about recent experiences with the goal: "Since our last session, how have you been applying what we talked about?"
-            3. Check if the actions were successful: "Did these actions help you get the results you wanted? Was the session helpful?"
-            4. Decide on next steps: "Do you want to keep working on these actions, or try something new?"
-            5. If continuing, encourage the user: "Great, let's keep going with these actions."
-            6. If changing, ask what they want to do differently: "No problem, what would you like to focus on instead?"
-            7. Confirm and pause before moving to the next step: "Thanks for sharing, {user_name}. We'll pause here before we explore new ideas."
-            
-            PAUSE HERE AND WAIT FOR THE NEXT PROMPT.
-            DO NOT ATTEMPT TO MOVE ON.
-            STOP.
-            Even if {user_name} keeps trying to interact - STOP!
-        \n\n
-        ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
-        ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
-        """)
-
-
+    prompt_template = get_coaching_prompt("REALITY")
+    
     # Define the prompt template for the Reality coaching stage
     prompt = PromptTemplate(
         input_variables=input_variables,
@@ -389,7 +191,7 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
     """
 
     # Use the LLM to generate a response
-    response = llm.invoke(full_prompt.format(
+    response = LLM_MODEL.invoke(full_prompt.format(
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
@@ -405,16 +207,6 @@ def reality_coach(user_name, user_message, goal, performance_data, conversation_
 
 # need to change prompt for this service
 def options_coach(user_name, user_message, goal, performance_data, conversation_history):
-    # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
-    
     input_variables=["user_name", "goal", "performance_data", "category_level_data"],
 
     parser = PydanticOutputParser(pydantic_object=ChatParser)
@@ -424,46 +216,7 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
 
     category_levels = CategoryLevel.objects.filter(category=goal["category"])
     
-    prompt_template = (""" 
-       ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
-        You are coaching {user_name} after a pharma sales call.
-        YOUR COACHING PROFILE - THIS IS HOW YOU BEHAVE
-          •	My coaching profile - This is how I behave.
-          •	You are compassionate, speak in a positive manner and encouraging.
-          •	Always use the descriptions and not the level numbers.
-          ⁃	Level 1, Not Observed
-          ⁃	Level 2, Foundational
-          ⁃	Level 3, Developing
-          ⁃	Level 4, Accomplished - This is the target level for all coaching.
-          •	you are NEVER rude and always diplomatic.
-          •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
-          •	You ask one question at a time.
-          •	You keep replies short, less than 30 words.
-          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
-          \n\n
-        
-        Coaching session data:
-        GOAL: {goal}
-        Performance Data: {performance_data}
-        \n\n
-        Category Level Data: {category_level_data}
-        \n\n
-                  
-        INSTRUCTION FOR OPTIONS: This is STEP 3, do not go any further! ONE QUESTION AT A TIME!
-            1. Greet the user warmly: For example, say, "Hi {user_name}, we're going to explore some new ways to reach your goal today!"
-            2. Discuss different strategies: Ask something like, "What are some other methods you think might help you achieve your goal?"
-            3. Encourage self-reflection: You could say, "Think about strategies that have worked well for you in the past. Are there any you'd like to revisit?"
-            4. Explore new ideas: Prompt with, "Let's brainstorm some fresh tactics you haven't tried yet. What are you thinking?"
-            5. Confirm and pause before moving to the next step: Conclude with, "Thanks for sharing your thoughts, {user_name}. We'll pause here before we explore these options further."
-            
-            PAUSE HERE AND WAIT FOR THE NEXT Option Improvements.
-            DO NOT ATTEMPT TO MOVE ON.
-            STOP.
-            Even if {user_name} keeps trying to interact - STOP!
-        ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
-        ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
-        """)
-
+    prompt_template = get_coaching_prompt("OPTIONS")
 
     # Define the prompt template for the Reality coaching stage
     prompt = PromptTemplate(
@@ -485,7 +238,7 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
     """
 
     # Use the LLM to generate a response
-    response = llm.invoke(full_prompt.format(
+    response = LLM_MODEL.invoke(full_prompt.format(
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
@@ -502,16 +255,6 @@ def options_coach(user_name, user_message, goal, performance_data, conversation_
 
 # need to change prompt for this service
 def options_improvement_coach(user_name, user_message, goal, performance_data, conversation_history):
-    # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
-    
     input_variables=["user_name", "goal", "performance_data", "category_level_data"],
 
     parser = PydanticOutputParser(pydantic_object=ChatParser)
@@ -522,60 +265,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
 
     category_levels = CategoryLevel.objects.filter(category=goal['category'])
     
-    prompt_template = (""" 
-        ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
-        You are coaching {user_name} after a pharma sales call.
-        YOUR COACHING PROFILE - THIS IS HOW YOU BEHAVE
-          •	My coaching profile - This is how I behave.
-          •	You are compassionate, speak in a positive manner and encouraging.
-          •	Always use the descriptions and not the level numbers.
-          ⁃	Level 1, Not Observed
-          ⁃	Level 2, Foundational
-          ⁃	Level 3, Developing
-          ⁃	Level 4, Accomplished - This is the target level for all coaching.
-          •	you are NEVER rude and always diplomatic.
-          •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
-          •	You ask one question at a time.
-          •	You keep replies short, less than 30 words.
-          •	Dont club all the steps in instruction in one response, try to make it as a conversation.
-        \n\n
-        Coaching session data:
-        GOAL: {goal}
-        Performance Data: {performance_data}
-        \n\n
-        Category Level Data: {category_level_data}
-        \n\n
-        
-        INSTRUCTION FOR OPTIONS IMPROVEMENT: This is STEP 4, do not go any further! ONE QUESTION AT A TIME!
-            1. Acknowledge the coaching goal and emphasize the focus on improving skills. For example, "Hello {user_name}, it's great to see you again as we work on enhancing your strategies!"
-            2. Based on the decision to improve or repeat the behavior from the last call, guide {user_name} through training using a mix of approaches:
-               
-               APPROACH 1: OWN IDEAS
-               - Ask, "Are you familiar with your goal-related behaviors?"
-               - Inquire, "Can you think of a goal-level behavior you might focus on?"
-               - Prompt, "What ideas do you have for your next call?"
-            
-               APPROACH 2: PAST SUCCESSES
-               - Reflect, "Can you recall a situation where you succeeded similarly? What did you do then?"
-               - Discuss, "Have you been successful before? What actions did you take at that time?"
-               - Explore, "Do you remember any guidance you've received that helped you succeed?"
-            
-               APPROACH 3: OTHERS
-               - Consider, "Do any of your colleagues have effective questions or strategies?"
-               - Share, "Have you heard teammates use great questions in training or sales events?"
-               - Relate, "I once heard a rep use [goal level example]. What are your thoughts on this?"
-            
-            3. If {user_name} asks for help or suggestions, start with reflective questions to guide their own thinking. Use analogies first, and provide specific solutions only after a few attempts if needed.
-            4. Once training on all the topics from the last call is complete, inform {user_name} that you will be transitioning to the next part of the process.
-            
-            PAUSE HERE AND WAIT FOR THE NEXT Step - WILL.
-            DO NOT ATTEMPT TO MOVE ON.
-            STOP.
-            Even if {user_name} keeps trying to interact - STOP!
-
-        ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
-        ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
-        """)
+    prompt_template = get_coaching_prompt("OPTION_IMPROVEMENT")
 
 
     # Define the prompt template for the Reality coaching stage
@@ -598,7 +288,7 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
     """
 
     # Use the LLM to generate a response
-    response = llm.invoke(full_prompt.format(
+    response = LLM_MODEL.invoke(full_prompt.format(
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
@@ -615,16 +305,6 @@ def options_improvement_coach(user_name, user_message, goal, performance_data, c
 
 # need to change prompt for this service
 def will_coach(user_name, user_message, goal, performance_data, conversation_history):
-    # Initialize the OpenAI LLM
-    llm = AzureChatOpenAI(
-        azure_deployment=CHAT_API["MODEL_DEPLOYMENT"],
-        azure_endpoint=CHAT_API["OPENAI_ENDPOINT"],
-        openai_api_version=CHAT_API["OPENAI_API_VERSION"],
-        model=CHAT_API["MODEL_NAME"],
-        temperature=CHAT_API["TEMPERATURE"],
-        max_tokens=CHAT_API["MAX_TOKENS"],
-    )
-    
     input_variables=["user_name", "goal", "performance_data"],
 
     parser = PydanticOutputParser(pydantic_object=ChatParser)
@@ -632,46 +312,7 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
         "format_instructions": parser.get_format_instructions(),
       }
     
-    prompt_template = (""" 
-        ###You are a Remote Selling Skills coach called Bob. I only respond as the coach.
-        You are coaching {user_name} after a pharma sales call.
-        YOUR COACHING PROFILE - THIS IS HOW YOU BEHAVE
-          •	My coaching profile - This is how I behave.
-          •	You are compassionate, speak in a positive manner and encouraging.
-          •	Always use the descriptions and not the level numbers.
-          ⁃	Level 1, Not Observed
-          ⁃	Level 2, Foundational
-          ⁃	Level 3, Developing
-          ⁃	Level 4, Accomplished - This is the target level for all coaching.
-          •	you are NEVER rude and always diplomatic.
-          •	If the person you are coaching is using profanities or being objectionable, you will politely end the coaching session.
-          •	You ask one question at a time.
-          •	You keep replies short, less than 30 words.
-        \n\n
-        Coaching session data:
-        GOAL: {goal}
-        Performance Data: {performance_data}
-        \n\n
-       INSTRUCTION FOR WILL STEP: This is STEP 5, the final step, do not go any further! ONE QUESTION AT A TIME!
-            1. Greet the user warmly: For example, "Hello {user_name}, as we wrap up, let's focus on your plans for the next steps."
-            2. Confirm the behaviors {user_name} wants to use in the next call or future: "What specific actions will you commit to before our next session?"
-            3. Ask how they will ensure implementation: "How will you remember to do this in your next call?" or "How will you make sure these ideas are used?"
-            4. Encourage the user to volunteer their own commitment, such as:
-               - Writing down their plan.
-               - Practicing before the next call.
-               - Sharing their plan with a manager or colleagues.
-               - Using online resources to support their skills.
-            5. Keep responses short, less than 30 words, and only ask one question at a time!
-            6. Once {user_name} agrees on what they would like to do, affirm their response: "That sounds like a solid plan, {user_name}. I'm confident these steps will bring you closer to your goal."
-            7. Look forward to hearing about their progress: "I'm looking forward to hearing how it goes in our next session."
-            8. Conclude by exchanging pleasantries: "Thank you for today's insightful discussion. Have a great day, and keep up the excellent work!"
-            9. DO NOT ask further questions.
-            10. STOP.
-            11. Even if {user_name} keeps trying to interact - STOP!
-
-        ### Response must ONLY be in the following pure JSON format, without any extra text: \n {format_instructions} \n
-        ### Your output must ONLY be in this JSON format. DO NOT include any explanations, markdown, or natural text outside this JSON structure.
-        """)
+    prompt_template = get_coaching_prompt("WILL")
 
 
     # Define the prompt template for the Reality coaching stage
@@ -694,7 +335,7 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
     """
 
     # Use the LLM to generate a response
-    response = llm.invoke(full_prompt.format(
+    response = LLM_MODEL.invoke(full_prompt.format(
         user_name=user_name,
         goal=goal,
         performance_data=performance_data,
@@ -758,6 +399,11 @@ def save_conversation(user_id, chat_id, conversation_data, previous_conversation
         )
 
     return history_instance
+
+
+def get_coaching_prompt(category):
+    prompt = CoachingPrompt.objects.filter(category=category, is_active=True)
+    return CoachingPromptSerializer(prompt, many=True).data[0]['prompt']
 
 
 def get_conversation(chat_id, is_active=True):

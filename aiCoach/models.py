@@ -12,6 +12,15 @@ CATEGORY_TYPES = [
     ('OUTCOME', 'Outcome'),
 ]
 
+# Coaching Prompt Category types for classification
+COACHING_PROMPT_TYPES = [
+    ('GOAL', 'Goal'),
+    ('REALITY', 'Reality'),
+    ('OPTIONS', 'Options'),
+    ('OPTION_IMPROVEMENT', 'Option_improvement'),
+    ('WILL', 'Will'),
+]
+
 # Define category levels
 LEVEL_CHOICES = [(i, str(i)) for i in range(1, 5)]  # Creates tuples: [(1, '1'), (2, '2'), (3, '3'), (4, '4')]
 
@@ -157,4 +166,15 @@ class UserConversationHistory(models.Model):
         return f"Conversation history for {self.user.first_name} {self.user.last_name}"
 
 
+
+# CoachingPrompt Model
+class CoachingPrompt(models.Model):
+    category = models.CharField(choices=COACHING_PROMPT_TYPES, max_length=50, blank=False, null=False, unique=True)
+    prompt = models.TextField(blank=False, null=False)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(default=timezone.now)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.category}"
 
