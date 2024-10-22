@@ -347,58 +347,7 @@ def will_coach(user_name, user_message, goal, performance_data, conversation_his
     result = parse_response(response.content)
     # print("\n result", result)
     return result
- 
 
-
-def save_conversation(user_id, chat_id, conversation_data, previous_conversation_data):
-    try:
-        user = User.objects.get(id=int(user_id))
-    except ObjectDoesNotExist:
-        raise ValueError(f"User with id {user_id} does not exist.")
-    
-    messages = conversation_data.get('messages', [])
-    summary = conversation_data.get('summary', [])
-    chat_label = conversation_data.get('chat_label', [])
-    isGoalStepCompleted = conversation_data.get('isGoalStepCompleted', False) | previous_conversation_data.get('isGoalStepCompleted', False)
-    isRealityStepCompleted = conversation_data.get('isRealityStepCompleted', False) | previous_conversation_data.get('isRealityStepCompleted', False)
-    isOptionStepCompleted = conversation_data.get('isOptionStepCompleted', False) | previous_conversation_data.get('isOptionStepCompleted', False)
-    isOptionImprovementStepCompleted = conversation_data.get('isOptionImprovementStepCompleted', False) | previous_conversation_data.get('isOptionImprovementStepCompleted', False)
-    isWillStepCompleted = conversation_data.get('isWillStepCompleted', False) | previous_conversation_data.get('isWillStepCompleted', False)
-    is_active = conversation_data.get('is_active', True)
-
-
-    # Check if the  conversation_history already exists
-    conversation_history_exists = UserConversationHistory.objects.filter(chat_id=chat_id, is_active=True).exists()
-
-    # If  conversation_history exists, update the UserConversationHistorys and summary, without touching chat_label
-    if conversation_history_exists:
-        history_instance = UserConversationHistory.objects.filter(chat_id=chat_id, user_id=user_id).update(
-            messages=messages,
-            summary=summary,
-            isGoalStepCompleted=isGoalStepCompleted,
-            isRealityStepCompleted=isRealityStepCompleted,
-            isOptionStepCompleted=isOptionStepCompleted,
-            isOptionImprovementStepCompleted=isOptionImprovementStepCompleted,
-            isWillStepCompleted=isWillStepCompleted,
-            is_active=is_active,
-        )
-    else:
-        # If chat does not exist, create a new one with chat_id
-        history_instance = UserConversationHistory.objects.create(
-            user=user,
-            chat_id=chat_id,
-            messages=messages,
-            chat_label=chat_label,
-            summary=summary,
-            isGoalStepCompleted=isGoalStepCompleted,
-            isRealityStepCompleted=isRealityStepCompleted,
-            isOptionStepCompleted=isOptionStepCompleted,
-            isOptionImprovementStepCompleted=isOptionImprovementStepCompleted,
-            isWillStepCompleted=isWillStepCompleted,
-            is_active=is_active,
-        )
-
-    return history_instance
 
 
 def get_coaching_prompt(category):

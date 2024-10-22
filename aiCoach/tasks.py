@@ -1,9 +1,14 @@
 from collections import deque
 from celery import shared_task
+from django.core.exceptions import ObjectDoesNotExist
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
+
+from aiCoach.models import UserConversationHistory, User
 from aiCoach.outputParser import ChatLabelParser, ChatParser
 from langchain.memory import ConversationSummaryBufferMemory
+
+from aiCoach.serializers import UserConversationHistorySerializer
 from aiCoach.utils import CHAT_API, LLM_MODEL, parse_response
 # from aiCoach.services import save_conversation
 
@@ -89,8 +94,77 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
         # Update the conversation data with the generated chat label
         conversation_data['chat_label'] = chat_label_result["chatLabel"]
 
-    # Import save_conversation locally to avoid circular import issues
-    from aiCoach.services import save_conversation
-
     # Save the updated conversation, including the chat label, messages, and summary
-    save_conversation(user_id, chat_id, conversation_data, previous_conversation_data)
+    save_conversation.delay(user_id, chat_id, conversation_data, previous_conversation_data)
+
+
+@shared_task
+def save_conversation(user_id, chat_id, conversation_data, previous_conversation_data):
+    print(" inside save_conversation ")
+    print(user_id)
+    print(type(user_id))
+    print(chat_id)
+    print(type(chat_id))
+    print(conversation_data)
+    print(type(conversation_data))
+    print(previous_conversation_data)
+    print(type(previous_conversation_data))
+
+    try:
+        user = User.objects.get(id=user_id)
+        print("user in save_conversation ", user )
+    except ObjectDoesNotExist:
+        raise ValueError(f"User with id {user_id} does not exist.")
+    print(" inside save_conversation2 ")
+
+    messages = conversation_data.get('messages', [])
+    summary = conversation_data.get('summary', [])
+    chat_label = conversation_data.get('chat_label', [])
+    isGoalStepCompleted = conversation_data.get('isGoalStepCompleted', False) | previous_conversation_data.get(
+        'isGoalStepCompleted', False)
+    isRealityStepCompleted = conversation_data.get('isRealityStepCompleted', False) | previous_conversation_data.get(
+        'isRealityStepCompleted', False)
+    isOptionStepCompleted = conversation_data.get('isOptionStepCompleted', False) | previous_conversation_data.get(
+        'isOptionStepCompleted', False)
+    isOptionImprovementStepCompleted = conversation_data.get('isOptionImprovementStepCompleted',
+                                                             False) | previous_conversation_data.get(
+        'isOptionImprovementStepCompleted', False)
+    isWillStepCompleted = conversation_data.get('isWillStepCompleted', False) | previous_conversation_data.get(
+        'isWillStepCompleted', False)
+    is_active = conversation_data.get('is_active', True)
+
+    # Check if the  conversation_history already exists
+    conversation_history_exists = UserConversationHistory.objects.filter(chat_id=chat_id, is_active=True).exists()
+
+    # If  conversation_history exists, update the UserConversationHistorys and summary, without touching chat_label
+    if conversation_history_exists:
+        print('UserConversationHistory just updation')
+
+        history_instance = UserConversationHistory.objects.filter(chat_id=chat_id, user_id=user_id).update(
+            messages=messages,
+            summary=summary,
+            isGoalStepCompleted=isGoalStepCompleted,
+            isRealityStepCompleted=isRealityStepCompleted,
+            isOptionStepCompleted=isOptionStepCompleted,
+            isOptionImprovementStepCompleted=isOptionImprovementStepCompleted,
+            isWillStepCompleted=isWillStepCompleted,
+            is_active=is_active,
+        )
+    else:
+        print('UserConversationHistory new creation')
+        # If chat does not exist, create a new one with chat_id
+        history_instance = UserConversationHistory.objects.create(
+            user=user,
+            chat_id=chat_id,
+            messages=messages,
+            chat_label=chat_label,
+            summary=summary,
+            isGoalStepCompleted=isGoalStepCompleted,
+            isRealityStepCompleted=isRealityStepCompleted,
+            isOptionStepCompleted=isOptionStepCompleted,
+            isOptionImprovementStepCompleted=isOptionImprovementStepCompleted,
+            isWillStepCompleted=isWillStepCompleted,
+            is_active=is_active,
+        )
+    print(UserConversationHistorySerializer(history_instance).data)
+    return UserConversationHistorySerializer(history_instance).data

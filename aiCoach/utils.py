@@ -1,9 +1,11 @@
 import json
 import re
 from django.conf import settings
+from django.core.exceptions import ObjectDoesNotExist
 from dotenv import load_dotenv
 from langchain_openai import AzureChatOpenAI
 
+from aiCoach.models import UserConversationHistory, User
 
 load_dotenv()
 
