@@ -4,22 +4,31 @@ from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-
+print("BASE_DIR")
+print(BASE_DIR)
 # Load environment variables from .env file
 load_dotenv()
 
 # Retrieve environment variables
-AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+AZURE_OPENAI_DEPLOYMENT_NAME = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "test2")
 AZURE_OPENAI_MODEL_NAME = os.getenv("AZURE_OPENAI_MODEL_NAME",'gpt-4o')
 AZURE_OPENAI_CHAT_MAX_TRIM_TOKENS = int(os.getenv("AZURE_OPENAI_CHAT_MAX_TRIM_TOKENS", 500))
-AZURE_OPENAI_CHAT_TEMPERATURE = float(os.getenv("AZURE_OPENAI_CHAT_TEMPERATURE", 0.7))
-AZURE_OPENAI_CHAT_MAX_TOKENS = int(os.getenv("AZURE_OPENAI_CHAT_MAX_TOKENS", 8000))
+AZURE_OPENAI_CHAT_TEMPERATURE = float(os.getenv("AZURE_OPENAI_CHAT_TEMPERATURE", 0.5))
+AZURE_OPENAI_CHAT_MAX_TOKENS = int(os.getenv("AZURE_OPENAI_CHAT_MAX_TOKENS", 4000))
 AZURE_OPENAI_CHAT_SUMMARY_MAX_TOKEN = int(os.getenv("AZURE_OPENAI_CHAT_SUMMARY_MAX_TOKEN", 10))
 AZURE_OPENAI_CONVERSATION_BUFFER_WINDOW_SIZE = int(os.getenv("AZURE_OPENAI_CONVERSATION_BUFFER_WINDOW_SIZE", 5))
 AZURE_OPENAI_API_KEY = os.getenv("AZURE_OPENAI_API_KEY")
 AZURE_OPENAI_API_VERSION = os.getenv("AZURE_OPENAI_API_VERSION")
 AZURE_OPENAI_ENDPOINT = os.getenv("AZURE_OPENAI_ENDPOINT")
 
+
+# Celery Configuration Options
+CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Example using Redis
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
@@ -30,7 +39,7 @@ SECRET_KEY = 'django-insecure-+&j_+$cl&)my$9@0p9vlp+ry@@7u$m5ti5#%ejrp^gdbyd^jwl
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ["*"]
 
 
 # Application definition
@@ -43,7 +52,8 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'chat',
+    # 'chat',
+    'aiCoach'
 ]
 
 MIDDLEWARE = [
