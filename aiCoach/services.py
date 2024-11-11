@@ -23,6 +23,7 @@ from aiCoach.serializers import (
     UserPerformanceDataSerializer,
 )
 from aiCoach.tasks import async_save_conversation
+from aiCoach.utils import format_dict
 
 # Uncomment for debugging
 # set_debug(True)
@@ -89,9 +90,11 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
         user_call_statements(user_id), many=True
     ).data
     user_goal = UserGoalSerializer(get_user_goal(user_id)).data
+    user_goal = format_dict(user_goal)
     user_performance_data = UserPerformanceDataSerializer(
         get_user_performance_data(user_id), many=True
     ).data
+    user_performance_data = format_dict(user_performance_data)
 
     print("User Goal:", user_goal)
     print("User Performance Data:", user_performance_data)

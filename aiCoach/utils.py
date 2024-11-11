@@ -9,6 +9,12 @@ from aiCoach.models import UserConversationHistory, User
 
 load_dotenv()
 
+def format_dict(data):
+    output = ""
+    for key, value in data.items():
+        output += f"{key}: {value}\n"
+    return output
+
 
 # Azure OpenAI Configurations (from your settings)
 CHAT_API = {

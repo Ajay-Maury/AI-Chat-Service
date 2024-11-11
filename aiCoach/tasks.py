@@ -1,5 +1,6 @@
 from collections import deque
 from celery import shared_task
+from datetime import date
 from django.core.exceptions import ObjectDoesNotExist
 from langchain_core.prompts import PromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -59,7 +60,9 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
         }
 
         # Define input variables for the prompt template
-        input_variables = ["conversation", "user_goal"],
+        input_variables = ["conversation", "user_goal", "current_date"]
+
+        current_date = date.today()
 
         # Create a prompt template for the LLM model to generate a chat label
         prompt_template = ('''
@@ -69,6 +72,7 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
             ### Coaching session data:
             Conversation: {conversation} \n
             Goal: {user_goal} \n\n
+            current_data: {current_date}\n\n
             label should start with the date of the conversation and information about user goal with the user conversation.
             ### Instruction for your output format:
             \nOutput: {format_instructions}\n
@@ -83,8 +87,9 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
 
         # Invoke the LLM model with the formatted prompt to generate a chat label
         chat_label_response = LLM_MODEL.invoke(prompt.format(
-            conversation= messages,  # Concatenate all messages
+            conversation=messages,  # Concatenate all messages
             user_goal=user_goal,  # Pass the user goal
+            current_date=current_date,
             format_instructions=partial_variables["format_instructions"]  # Include format instructions
         ))
       
