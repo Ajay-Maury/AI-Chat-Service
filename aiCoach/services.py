@@ -1,7 +1,6 @@
 from django.core.exceptions import ValidationError, ObjectDoesNotExist
 from django.core.validators import validate_email
 from aiCoach.models import (
-    COACHING_PROMPT_TYPES,
     Category,
     CategoryLevel,
     CategoryLevelExample,
@@ -18,13 +17,11 @@ from aiCoach.outputParser import ChatParser
 from aiCoach.utils import CHAT_API, LLM_MODEL, parse_response
 from collections import deque
 from aiCoach.serializers import (
-    CoachingPromptSerializer,
     UserCallStatementsWithLevelSerializer,
     UserConversationHistorySerializer,
     UserGoalSerializer,
     UserPerformanceDataSerializer,
 )
-from langchain.globals import set_debug
 from aiCoach.tasks import async_save_conversation
 
 # Uncomment for debugging
@@ -68,6 +65,7 @@ def chat_with_coach(user_name, user_id, chat_id, user_message=""):
             }
         ]
         chat_history = []
+        messages = []
     else:
         messages = conversation_history_serialized[0].get('messages') or []
         print("Messages:", messages)

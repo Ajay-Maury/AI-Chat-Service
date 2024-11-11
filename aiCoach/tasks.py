@@ -69,6 +69,7 @@ def async_save_conversation(user_id, chat_id, user_goal, messages, conversation_
             ### Coaching session data:
             Conversation: {conversation} \n
             Goal: {user_goal} \n\n
+            label should start with the date of the conversation and information about user goal with the user conversation.
             ### Instruction for your output format:
             \nOutput: {format_instructions}\n
         ''')
